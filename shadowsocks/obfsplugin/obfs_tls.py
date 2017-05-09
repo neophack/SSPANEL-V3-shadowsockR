@@ -35,12 +35,17 @@ from shadowsocks.obfsplugin import plain
 from shadowsocks.common import to_bytes, to_str, ord
 from shadowsocks import lru_cache
 
-def create_tls_ticket_auth_obfs(method):
-    return tls_ticket_auth(method)
+def create_tls12_ticket_auth_obfs(method):
+    return tls_ticket_auth(method, b'\x03\x03', true)
+
+def create_tls13_ticket_auth_obfs(method):
+    return tls_ticket_auth(method, b'\x03\x04', false)
 
 obfs_map = {
-        'tls1.2_ticket_auth': (create_tls_ticket_auth_obfs,),
-        'tls1.2_ticket_auth_compatible': (create_tls_ticket_auth_obfs,),
+        'tls1.2_ticket_auth': (create_tls12_ticket_auth_obfs,),
+        'tls1.2_ticket_auth_compatible': (create_tls12_ticket_auth_obfs,),
+        'tls1.3_ticket_auth': (create_tls13_ticket_auth_obfs,),
+        'tls1.3_ticket_auth_compatible': (create_tls13_ticket_auth_obfs,),
 }
 
 def match_begin(str1, str2):
@@ -57,14 +62,15 @@ class obfs_auth_data(object):
         self.ticket_buf = {}
 
 class tls_ticket_auth(plain.plain):
-    def __init__(self, method):
+    def __init__(self, method, version, need_sendback):
         self.method = method
         self.handshake_status = 0
         self.send_buffer = b''
         self.recv_buffer = b''
         self.client_id = b''
         self.max_time_dif = 60 * 60 * 24 # time dif (second) setting
-        self.tls_version = b'\x03\x03'
+        self.tls_version = version
+        self.need_sendback = need_sendback
         self.overhead = 5
 
     def init_data(self):
@@ -289,5 +295,4 @@ class tls_ticket_auth(plain.plain):
         self.server_info.data.client_data.sweep()
         self.server_info.data.client_data[verifyid[:22]] = sessionid
         # (buffer_to_recv, is_need_decrypt, is_need_to_encode_and_send_back)
-        return (b'', False, True)
-
+        return (b'', False, self.need_sendback)
